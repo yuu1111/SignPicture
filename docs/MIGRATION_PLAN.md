@@ -237,3 +237,7 @@ quilt_loader_version=0.19.2
 - Stonecutter (マルチバージョン)
 - Cloth Config (GUI)
 - Fabric API / Forge / NeoForge / Quilt標準ライブラリ
+
+## Related Documents
+
+- [LEGACY_ALIGNMENT.md](LEGACY_ALIGNMENT.md) - レガシー実装への整合計画

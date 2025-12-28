@@ -1,5 +1,6 @@
 package net.teamfruit.signpic.http;
 
+import net.teamfruit.signpic.LoadCanceledException;
 import net.teamfruit.signpic.SignPicture;
 import net.teamfruit.signpic.config.SignPicConfig;
 import net.teamfruit.signpic.state.Progress;
@@ -14,21 +15,47 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * Downloads content from a URL to a local file.
+ * URLからローカルファイルへコンテンツをダウンロードするクラス。
+ * レガシーのContentDownload.javaに基づく実装。
  */
 public class ContentDownloader implements Communicator.CommunicateTask {
+    /** バッファサイズ (8KB) */
     private static final int BUFFER_SIZE = 8192;
 
+    /** ダウンロード元URL */
     private final String url;
+
+    /** 保存先パス */
     private final Path destination;
+
+    /** 状態管理オブジェクト */
     private final State state;
+
+    /** 完了時コールバック */
     private final Runnable onComplete;
+
+    /** キャンセルフラグ */
     private volatile boolean cancelled = false;
 
+    /**
+     * ContentDownloaderを構築する。
+     *
+     * @param url ダウンロード元URL
+     * @param destination 保存先パス
+     * @param state 状態管理オブジェクト
+     */
     public ContentDownloader(String url, Path destination, State state) {
         this(url, destination, state, null);
     }
 
+    /**
+     * ContentDownloaderを構築する。
+     *
+     * @param url ダウンロード元URL
+     * @param destination 保存先パス
+     * @param state 状態管理オブジェクト
+     * @param onComplete 完了時コールバック
+     */
     public ContentDownloader(String url, Path destination, State state, Runnable onComplete) {
         this.url = url;
         this.destination = destination;
@@ -36,9 +63,15 @@ public class ContentDownloader implements Communicator.CommunicateTask {
         this.onComplete = onComplete;
     }
 
+    /**
+     * ダウンロードを実行する。
+     * HTTP接続を確立し、コンテンツをファイルに保存する。
+     *
+     * @throws Exception ダウンロード中にエラーが発生した場合
+     */
     @Override
     public void execute() throws Exception {
-        SignPicture.LOGGER.debug("Downloading: {}", url);
+        SignPicture.LOGGER.debug("ダウンロード開始: {}", url);
         state.setType(StateType.DOWNLOADING);
         state.setProgress(new Progress());
 
@@ -53,21 +86,28 @@ public class ContentDownloader implements Communicator.CommunicateTask {
 
             int responseCode = connection.getResponseCode();
             if (responseCode != HttpURLConnection.HTTP_OK) {
-                throw new IOException("HTTP error: " + responseCode);
+                throw new IOException("HTTPエラー: " + responseCode);
             }
 
+            // Content-Typeが画像であることを検証
+            String contentType = connection.getContentType();
+            if (contentType != null && !isImageContentType(contentType)) {
+                throw new InvalidContentTypeException(contentType);
+            }
+
+            // コンテンツサイズチェック
             long contentLength = connection.getContentLengthLong();
             int maxBytes = SignPicConfig.get().contentMaxBytes;
             if (maxBytes > 0 && contentLength > maxBytes) {
-                throw new ContentTooLargeException(contentLength, maxBytes);
+                throw new ContentCapacityOverException(contentLength, maxBytes);
             }
 
             state.getProgress().overall = contentLength;
 
-            // Create parent directories
+            // 親ディレクトリを作成
             Files.createDirectories(destination.getParent());
 
-            // Download to temp file first
+            // 一時ファイルにダウンロード
             Path tempFile = destination.resolveSibling(destination.getFileName() + ".tmp");
 
             try (InputStream in = new BufferedInputStream(connection.getInputStream());
@@ -78,26 +118,27 @@ public class ContentDownloader implements Communicator.CommunicateTask {
                 int bytesRead;
 
                 while ((bytesRead = in.read(buffer)) != -1) {
+                    // キャンセルチェック
                     if (cancelled) {
-                        throw new DownloadCancelledException();
+                        throw new LoadCanceledException();
                     }
 
                     out.write(buffer, 0, bytesRead);
                     totalRead += bytesRead;
                     state.getProgress().done = totalRead;
 
-                    // Check max size during download
+                    // ダウンロード中のサイズチェック
                     if (maxBytes > 0 && totalRead > maxBytes) {
-                        throw new ContentTooLargeException(totalRead, maxBytes);
+                        throw new ContentCapacityOverException(totalRead, maxBytes);
                     }
                 }
             }
 
-            // Move temp file to final destination
+            // 一時ファイルを最終ファイルに移動
             Files.move(tempFile, destination, StandardCopyOption.REPLACE_EXISTING);
-            SignPicture.LOGGER.debug("Download complete: {}", destination);
+            SignPicture.LOGGER.debug("ダウンロード完了: {}", destination);
 
-            // Call completion callback
+            // 完了コールバックを呼び出し
             if (onComplete != null) {
                 onComplete.run();
             }
@@ -109,25 +150,55 @@ public class ContentDownloader implements Communicator.CommunicateTask {
         }
     }
 
+    /**
+     * エラー発生時のハンドラ。
+     *
+     * @param e 発生した例外
+     */
     @Override
     public void onError(Exception e) {
         state.setError(e);
-        SignPicture.LOGGER.error("Download failed: {}", url, e);
+        SignPicture.LOGGER.error("ダウンロード失敗: {}", url, e);
     }
 
+    /**
+     * ダウンロードをキャンセルする。
+     */
     public void cancel() {
         this.cancelled = true;
     }
 
-    public static class ContentTooLargeException extends IOException {
-        public ContentTooLargeException(long actual, long max) {
-            super("Content too large: " + actual + " bytes (max: " + max + ")");
+    /**
+     * Content-Typeが画像かどうかを判定する。
+     *
+     * @param contentType Content-Type文字列
+     * @return 画像の場合true
+     */
+    private static boolean isImageContentType(String contentType) {
+        if (contentType == null) {
+            return true; // 指定なしの場合は許可
+        }
+        String type = contentType.toLowerCase();
+        return type.startsWith("image/") ||
+               type.contains("octet-stream"); // バイナリストリームも許可
+    }
+
+    /**
+     * 無効なContent-Typeの場合にスローされる例外。
+     */
+    public static class InvalidContentTypeException extends IOException {
+        public InvalidContentTypeException(String contentType) {
+            super("無効なContent-Type: " + contentType + " (画像が期待されます)");
         }
     }
 
-    public static class DownloadCancelledException extends IOException {
-        public DownloadCancelledException() {
-            super("Download was cancelled");
+    /**
+     * コンテンツサイズが上限を超えた場合にスローされる例外。
+     * レガシー実装との互換性のため、クラス名をContentCapacityOverExceptionに設定。
+     */
+    public static class ContentCapacityOverException extends IOException {
+        public ContentCapacityOverException(long actual, long max) {
+            super("コンテンツサイズ超過: " + actual + " bytes (上限: " + max + ")");
         }
     }
 }
