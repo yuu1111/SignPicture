@@ -1,0 +1,27 @@
+modLoader = "javafml"
+loaderVersion = "[40,)"
+license = "${mod.license}"
+issueTrackerURL = "${mod.issues}"
+
+[[mods]]
+modId = "${mod.id}"
+version = "${mod.version}"
+displayName = "${mod.name}"
+displayURL = "${mod.homepage}"
+logoFile = "assets/signpic/icon.png"
+authors = "TeamFruit, Kamesuta"
+description = '''${mod.description}'''
+
+[[dependencies.${mod.id}]]
+modId = "forge"
+mandatory = true
+versionRange = "[40,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.${mod.id}]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[${minecraft_version},)"
+ordering = "NONE"
+side = "CLIENT"

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "${mod.id}",
+  "version": "${mod.version}",
+  "name": "${mod.name}",
+  "description": "${mod.description}",
+  "authors": ["TeamFruit", "Kamesuta"],
+  "contact": {
+    "homepage": "${mod.homepage}",
+    "sources": "${mod.sources}",
+    "issues": "${mod.issues}"
+  },
+  "license": "${mod.license}",
+  "icon": "assets/signpic/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "main": ["net.teamfruit.signpic.SignPictureFabric"],
+    "client": ["net.teamfruit.signpic.SignPictureFabric"]
+  },
+  "mixins": ["signpic.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.14.0",
+    "minecraft": ">=${minecraft_version}",
+    "java": ">=17"
+  }
+}

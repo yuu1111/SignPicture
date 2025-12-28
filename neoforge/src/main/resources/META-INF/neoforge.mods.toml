@@ -1,0 +1,27 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "${mod.license}"
+issueTrackerURL = "${mod.issues}"
+
+[[mods]]
+modId = "${mod.id}"
+version = "${mod.version}"
+displayName = "${mod.name}"
+displayURL = "${mod.homepage}"
+logoFile = "assets/signpic/icon.png"
+authors = "TeamFruit, Kamesuta"
+description = '''${mod.description}'''
+
+[[dependencies.${mod.id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "[20.4,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.${mod.id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "[${minecraft_version},)"
+ordering = "NONE"
+side = "CLIENT"
