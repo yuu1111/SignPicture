@@ -25,11 +25,23 @@ architectury {
     minecraft = mcVersion
 }
 
-// Configure platform
+// Configure platform and create necessary configurations
 when (loader) {
     "fabric" -> architectury.fabric()
-    "forge" -> architectury.forge()
-    "neoforge" -> architectury.neoForge()
+    "forge" -> {
+        architectury.forge()
+        // Create forge configuration if it doesn't exist
+        if (configurations.findByName("forge") == null) {
+            configurations.create("forge")
+        }
+    }
+    "neoforge" -> {
+        architectury.neoForge()
+        // Create neoForge configuration if it doesn't exist
+        if (configurations.findByName("neoForge") == null) {
+            configurations.create("neoForge")
+        }
+    }
 }
 
 // Configure Loom
@@ -85,38 +97,37 @@ dependencies {
     minecraft("com.mojang:minecraft:$mcVersion")
     mappings(loom.officialMojangMappings())
 
-    // Loader-specific dependencies
-    when (loader) {
-        "fabric" -> {
-            modImplementation("net.fabricmc:fabric-loader:$fabricLoaderVersion")
-            modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
-            modImplementation("dev.architectury:architectury-fabric:$architecturyVersion")
-        }
-        "forge" -> {
-            configurations.findByName("forge")?.let {
-                dependencies.add("forge", "net.minecraftforge:forge:$mcVersion-$forgeVersion")
-            }
-            modImplementation("dev.architectury:architectury-forge:$architecturyVersion")
-        }
-        "neoforge" -> {
-            configurations.findByName("neoForge")?.let {
-                dependencies.add("neoForge", "net.neoforged:neoforge:$neoforgeVersion")
-            }
-            modImplementation("dev.architectury:architectury-neoforge:$architecturyVersion")
-        }
+    // Fabric dependencies
+    if (loader == "fabric") {
+        modImplementation("net.fabricmc:fabric-loader:$fabricLoaderVersion")
+        modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
+        modImplementation("dev.architectury:architectury-fabric:$architecturyVersion")
     }
 }
 
-// Configure source sets
+// Forge dependencies
+if (loader == "forge") {
+    dependencies.add("forge", "net.minecraftforge:forge:$mcVersion-$forgeVersion")
+    dependencies.add("modImplementation", "dev.architectury:architectury-forge:$architecturyVersion")
+}
+
+// NeoForge dependencies
+if (loader == "neoforge") {
+    dependencies.add("neoForge", "net.neoforged:neoforge:$neoforgeVersion")
+    dependencies.add("modImplementation", "dev.architectury:architectury-neoforge:$architecturyVersion")
+}
+
+// Configure source sets - use root project paths for Stonecutter
+val rootDir = rootProject.projectDir
 sourceSets {
     main {
         java {
-            srcDir("common/src/main/java")
-            srcDir("$loader/src/main/java")
+            srcDir(rootDir.resolve("common/src/main/java"))
+            srcDir(rootDir.resolve("$loader/src/main/java"))
         }
         resources {
-            srcDir("common/src/main/resources")
-            srcDir("$loader/src/main/resources")
+            srcDir(rootDir.resolve("common/src/main/resources"))
+            srcDir(rootDir.resolve("$loader/src/main/resources"))
         }
     }
 }

@@ -4,6 +4,7 @@
   "package": "net.teamfruit.signpic.mixin",
   "compatibilityLevel": "JAVA_17",
   "client": [
+    "SignRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

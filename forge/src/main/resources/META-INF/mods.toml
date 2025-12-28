@@ -1,25 +1,25 @@
 modLoader = "javafml"
 loaderVersion = "[40,)"
-license = "${mod.license}"
-issueTrackerURL = "${mod.issues}"
+license = "LGPL-3.0"
+issueTrackerURL = "https://github.com/Team-Fruit/SignPicture/issues"
 
 [[mods]]
-modId = "${mod.id}"
-version = "${mod.version}"
-displayName = "${mod.name}"
-displayURL = "${mod.homepage}"
+modId = "${mod_id}"
+version = "${mod_version}"
+displayName = "${mod_name}"
+displayURL = "https://github.com/Team-Fruit/SignPicture"
 logoFile = "assets/signpic/icon.png"
 authors = "TeamFruit, Kamesuta"
-description = '''${mod.description}'''
+description = '''Display images on signs in Minecraft'''
 
-[[dependencies.${mod.id}]]
+[[dependencies.signpic]]
 modId = "forge"
 mandatory = true
 versionRange = "[40,)"
 ordering = "NONE"
 side = "CLIENT"
 
-[[dependencies.${mod.id}]]
+[[dependencies.signpic]]
 modId = "minecraft"
 mandatory = true
 versionRange = "[${minecraft_version},)"

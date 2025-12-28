@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "id": "${mod.id}",
-  "version": "${mod.version}",
-  "name": "${mod.name}",
-  "description": "${mod.description}",
+  "id": "${mod_id}",
+  "version": "${mod_version}",
+  "name": "${mod_name}",
+  "description": "Display images on signs in Minecraft",
   "authors": ["TeamFruit", "Kamesuta"],
   "contact": {
-    "homepage": "${mod.homepage}",
-    "sources": "${mod.sources}",
-    "issues": "${mod.issues}"
+    "homepage": "https://github.com/Team-Fruit/SignPicture",
+    "sources": "https://github.com/Team-Fruit/SignPicture",
+    "issues": "https://github.com/Team-Fruit/SignPicture/issues"
   },
-  "license": "${mod.license}",
+  "license": "LGPL-3.0",
   "icon": "assets/signpic/icon.png",
   "environment": "client",
   "entrypoints": {
