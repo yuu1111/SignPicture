@@ -1,80 +1,153 @@
 package net.teamfruit.signpic.content;
 
+import net.teamfruit.signpic.entry.ICollectable;
 import net.teamfruit.signpic.state.State;
+import net.teamfruit.signpic.state.StateType;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 
 /**
- * Represents downloaded content (image data) that can be shared across multiple entries.
+ * ダウンロードされたコンテンツ (画像データ) を表すクラス。
+ * 複数のエントリ間で共有可能。
  */
-public class Content {
-    private final String url;
-    private final State state;
-    private long lastAccessTime;
-    private Path cachedFile;
-    private ContentTexture texture;
-    private int referenceCount = 0;
+public class Content implements ICollectable {
+    /** コンテンツID */
+    public final @NotNull ContentId id;
 
-    public Content(String url) {
-        this.url = url;
+    /** 状態 */
+    public final @NotNull State state;
+
+    /** 画像から抽出されたメタデータ */
+    public @Nullable String imagemeta;
+
+    /** キャッシュファイルパス */
+    private @Nullable Path cachedFile;
+
+    /** テクスチャ */
+    private @Nullable ContentTexture texture;
+
+    /** 廃棄フラグ */
+    private boolean dirty;
+
+    /**
+     * コンテンツを作成する。
+     *
+     * @param id コンテンツID
+     */
+    public Content(final @NotNull ContentId id) {
+        this.id = id;
         this.state = new State();
-        this.lastAccessTime = System.currentTimeMillis();
+        this.state.setName(id.getID());
     }
 
-    public String getUrl() {
-        return url;
+    /**
+     * 初期化処理。
+     */
+    public void onInit() {
+        this.state.setType(StateType.INITALIZED);
     }
 
-    public State getState() {
+    /**
+     * リソース解放処理。
+     */
+    @Override
+    public void onCollect() {
+        dispose();
+    }
+
+    /**
+     * 廃棄すべきかどうかを判定する。
+     *
+     * @return 廃棄すべき場合true
+     */
+    public boolean shouldCollect() {
+        return this.dirty;
+    }
+
+    /**
+     * 廃棄フラグを設定する。
+     */
+    public void markDirty() {
+        this.dirty = true;
+    }
+
+    /**
+     * キャッシュをクリアして廃棄フラグを設定する。
+     */
+    public void markDirtyWithCache() {
+        // TODO: キャッシュメタの更新
+        markDirty();
+    }
+
+    /**
+     * アクセス時刻を更新する (ContentSlotのused()に委譲)。
+     * 現在の実装ではContentSlotが管理するため、このメソッドは何もしない。
+     */
+    public void touch() {
+        // ContentSlotがアクセス時刻を管理する
+    }
+
+    /**
+     * URIを取得する。
+     *
+     * @return 完全なURI
+     */
+    public @NotNull String getUrl() {
+        return id.getURI();
+    }
+
+    /**
+     * 状態を取得する。
+     *
+     * @return 状態
+     */
+    public @NotNull State getState() {
         return state;
     }
 
+    /**
+     * キャッシュファイルパスを取得する。
+     *
+     * @return キャッシュファイルパス
+     */
     @Nullable
     public Path getCachedFile() {
         return cachedFile;
     }
 
-    public void setCachedFile(Path cachedFile) {
+    /**
+     * キャッシュファイルパスを設定する。
+     *
+     * @param cachedFile キャッシュファイルパス
+     */
+    public void setCachedFile(@Nullable Path cachedFile) {
         this.cachedFile = cachedFile;
     }
 
+    /**
+     * テクスチャを取得する。
+     *
+     * @return テクスチャ
+     */
     @Nullable
     public ContentTexture getTexture() {
         return texture;
     }
 
-    public void setTexture(ContentTexture texture) {
+    /**
+     * テクスチャを設定する。
+     *
+     * @param texture テクスチャ
+     */
+    public void setTexture(@Nullable ContentTexture texture) {
         this.texture = texture;
     }
 
-    public void touch() {
-        this.lastAccessTime = System.currentTimeMillis();
-    }
-
-    public long getLastAccessTime() {
-        return lastAccessTime;
-    }
-
-    public void addReference() {
-        referenceCount++;
-    }
-
-    public void removeReference() {
-        referenceCount--;
-    }
-
-    public int getReferenceCount() {
-        return referenceCount;
-    }
-
-    public boolean shouldCollect(long gcDelayMs) {
-        if (referenceCount > 0) {
-            return false;
-        }
-        return System.currentTimeMillis() - lastAccessTime > gcDelayMs;
-    }
-
+    /**
+     * リソースを解放する。
+     */
     public void dispose() {
         if (texture != null) {
             texture.dispose();

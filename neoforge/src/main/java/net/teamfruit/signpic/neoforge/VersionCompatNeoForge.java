@@ -20,6 +20,12 @@ public class VersionCompatNeoForge implements VersionCompat.VersionCompatImpl {
     }
 
     @Override
+    public ResourceLocation parseResourceLocation(String location) {
+        // NeoForge 1.21+ uses the parse method
+        return ResourceLocation.parse(location);
+    }
+
+    @Override
     public void addVertex(
             VertexConsumer consumer,
             Matrix4f matrix,

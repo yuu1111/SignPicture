@@ -28,6 +28,7 @@ public class SignPicConfig {
 
     // Content settings
     public int contentLoadThreads = 3;
+    public int contentLoadTick = 1;
     public int contentMaxBytes = 32 * 1024 * 1024;
     public int contentGcDelayTicks = 15 * 20;
     public int contentMaxRetry = 3;

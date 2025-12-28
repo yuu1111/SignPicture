@@ -3,6 +3,7 @@ package net.teamfruit.signpic.http;
 import net.teamfruit.signpic.LoadCanceledException;
 import net.teamfruit.signpic.SignPicture;
 import net.teamfruit.signpic.config.SignPicConfig;
+import net.teamfruit.signpic.content.ContentCapacityOverException;
 import net.teamfruit.signpic.state.Progress;
 import net.teamfruit.signpic.state.State;
 import net.teamfruit.signpic.state.StateType;
@@ -189,16 +190,6 @@ public class ContentDownloader implements Communicator.CommunicateTask {
     public static class InvalidContentTypeException extends IOException {
         public InvalidContentTypeException(String contentType) {
             super("無効なContent-Type: " + contentType + " (画像が期待されます)");
-        }
-    }
-
-    /**
-     * コンテンツサイズが上限を超えた場合にスローされる例外。
-     * レガシー実装との互換性のため、クラス名をContentCapacityOverExceptionに設定。
-     */
-    public static class ContentCapacityOverException extends IOException {
-        public ContentCapacityOverException(long actual, long max) {
-            super("コンテンツサイズ超過: " + actual + " bytes (上限: " + max + ")");
         }
     }
 }

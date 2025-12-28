@@ -2,6 +2,7 @@ package net.teamfruit.signpic.entry;
 
 import net.teamfruit.signpic.SignPicture;
 import net.teamfruit.signpic.config.SignPicConfig;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Iterator;
@@ -9,47 +10,77 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Manages sign picture entries and their lifecycle.
+ * 看板画像エントリを管理するクラス。
+ * エントリのライフサイクル管理とGCを担当する。
  */
 public class EntryManager {
-    private static EntryManager instance;
+    /** シングルトンインスタンス */
+    public static @NotNull EntryManager instance = new EntryManager();
 
-    public static EntryManager getInstance() {
-        if (instance == null) {
-            instance = new EntryManager();
-        }
+    /**
+     * シングルトンインスタンスを取得する。
+     *
+     * @return EntryManagerインスタンス
+     */
+    public static @NotNull EntryManager getInstance() {
         return instance;
     }
 
-    private final Map<String, Entry> entryMap = new ConcurrentHashMap<>();
+    /** エントリレジストリ (EntryId -> EntrySlot) */
+    private final @NotNull Map<EntryId, EntrySlot<Entry>> registry = new ConcurrentHashMap<>();
 
     private EntryManager() {}
 
     /**
-     * Gets an entry for the given sign text, creating one if it doesn't exist.
+     * EntryIdに対応するエントリを取得する。
+     * 存在しない場合は作成する。
+     *
+     * @param id EntryId
+     * @return Entry
      */
-    public Entry getOrCreate(String signText) {
-        return entryMap.computeIfAbsent(signText, text -> {
-            EntryId id = EntryId.parse(text);
-            return new Entry(id);
-        });
+    public @NotNull Entry get(final @NotNull EntryId id) {
+        final EntrySlot<Entry> slot = this.registry.get(id);
+        if (slot != null) {
+            return slot.get();
+        } else {
+            final Entry entry = new Entry(id);
+            this.registry.put(id, new EntrySlot<>(entry));
+            return entry;
+        }
     }
 
     /**
-     * Gets an entry for the given EntryId, creating one if it doesn't exist.
+     * 看板テキストに対応するエントリを取得または作成する。
+     *
+     * @param signText 看板テキスト
+     * @return エントリ
+     */
+    public @NotNull Entry getOrCreate(final @NotNull String signText) {
+        EntryId id = EntryId.parse(signText);
+        return get(id);
+    }
+
+    /**
+     * EntryIdに対応するエントリを取得または作成する。
+     *
+     * @param entryId エントリID
+     * @return エントリ、無効なIDの場合はnull
      */
     @Nullable
-    public Entry getOrCreate(EntryId entryId) {
+    public Entry getOrCreate(final @Nullable EntryId entryId) {
         if (entryId == null || !entryId.isValid()) {
             return null;
         }
-        return entryMap.computeIfAbsent(entryId.getRaw(), key -> new Entry(entryId));
+        return get(entryId);
     }
 
     /**
-     * Gets an entry for sign lines, creating one if it doesn't exist.
+     * 看板テキスト行に対応するエントリを取得または作成する。
+     *
+     * @param signLines 看板テキスト行の配列
+     * @return エントリ
      */
-    public Entry getOrCreate(String[] signLines) {
+    public @NotNull Entry getOrCreate(final @NotNull String[] signLines) {
         StringBuilder combined = new StringBuilder();
         for (String line : signLines) {
             if (line != null) {
@@ -59,38 +90,50 @@ public class EntryManager {
         return getOrCreate(combined.toString().trim());
     }
 
-    @Nullable
-    public Entry get(String signText) {
-        return entryMap.get(signText);
-    }
-
     /**
-     * Runs garbage collection on unused entries.
+     * ティック処理。
+     * GCを実行する。
      */
-    public void gc() {
-        long gcDelayMs = SignPicConfig.get().entryGcDelayTicks * 50L;
-        long now = System.currentTimeMillis();
-        Iterator<Map.Entry<String, Entry>> it = entryMap.entrySet().iterator();
+    public void onTick() {
+        // グローバルティック更新
+        EntrySlot.Tick();
 
-        while (it.hasNext()) {
-            Map.Entry<String, Entry> mapEntry = it.next();
-            Entry entry = mapEntry.getValue();
+        // GC処理
+        for (final Iterator<Map.Entry<EntryId, EntrySlot<Entry>>> itr = this.registry.entrySet().iterator(); itr.hasNext();) {
+            final Map.Entry<EntryId, EntrySlot<Entry>> mapEntry = itr.next();
+            final EntrySlot<Entry> slot = mapEntry.getValue();
 
-            if (now - entry.getLastAccessTime() > gcDelayMs) {
-                SignPicture.LOGGER.debug("GC: Removing entry {}", mapEntry.getKey());
-                it.remove();
+            if (slot.shouldCollect()) {
+                slot.get().onCollect();
+                SignPicture.LOGGER.debug("GC: エントリを削除 {}", mapEntry.getKey());
+                itr.remove();
             }
         }
     }
 
     /**
-     * Clears all entries.
+     * 未使用エントリのガベージコレクションを実行する (onTick()へのエイリアス)。
      */
-    public void clear() {
-        entryMap.clear();
+    public void gc() {
+        onTick();
     }
 
+    /**
+     * すべてのエントリを削除する。
+     */
+    public void clear() {
+        for (EntrySlot<Entry> slot : registry.values()) {
+            slot.get().onCollect();
+        }
+        registry.clear();
+    }
+
+    /**
+     * 登録されているエントリ数を取得する。
+     *
+     * @return エントリ数
+     */
     public int getEntryCount() {
-        return entryMap.size();
+        return registry.size();
     }
 }

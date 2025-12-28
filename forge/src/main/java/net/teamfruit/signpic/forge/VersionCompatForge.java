@@ -20,6 +20,13 @@ public class VersionCompatForge implements VersionCompat.VersionCompatImpl {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
+    public ResourceLocation parseResourceLocation(String location) {
+        // Forge 1.20.x uses the constructor
+        return new ResourceLocation(location);
+    }
+
+    @Override
     public void addVertex(
             VertexConsumer consumer,
             Matrix4f matrix,

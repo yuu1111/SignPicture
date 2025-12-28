@@ -2,172 +2,134 @@
 
 現在の実装をレガシー (_legacy/) の設計思想に寄せるための修正項目。
 
-## 1. 画像読込層 (ImageLoader.java)
+## 完了済み
 
-**現在の問題**: `NativeImage.read()`優先でImageIOフォールバックは後付け
+- [x] ImageLoader.java - ImageReader方式、GIF対応、InvaildImageException
+- [x] InvaildImageException.java - 新規作成
+- [x] LoadCanceledException.java - 新規作成
+- [x] ContentDownloader.java - 日本語コメント、ContentCapacityOverException
+- [x] State/Progress/StateType.java - 日本語コメント
+- [x] SignPicScreen.java - プロパティ編集UI (W/H/X/Y/Z/R)
+- [x] SignPicProperties.java - toSignText()メソッド追加
 
-**レガシー方式に寄せる**:
-```java
-// レガシー: ImageIOLoader.java
-ImageInputStream imagestream = ImageIO.createImageInputStream(stream);
-Iterator<ImageReader> iter = ImageIO.getImageReaders(imagestream);
-if (!iter.hasNext())
-    throw new InvaildImageException();  // 専用例外
-ImageReader reader = iter.next();
+## アーキテクチャの主要な違い
 
-if (reader.getFormatName() == "gif")
-    textures = loadGif();  // GIF専用処理
-else
-    textures = loadImage(reader, imagestream);
-```
+### 1. Entry管理
 
-**修正内容**:
-1. `ImageIO.getImageReaders()`でフォーマット検出を先行
-2. `InvaildImageException`を追加 (typo含め再現)
-3. GIF判定とloadGif()の追加
-4. `InputFactory`パターンは不要 (Pathで十分)
+| 項目 | レガシー | 現在 | 対応方針 |
+|------|---------|------|----------|
+| GC機構 | EntrySlot (ティックベース) | lastAccessTime (ミリ秒) | 現在のシンプル方式を維持 |
+| EntryId | ItemEntryId/SignEntryId/PreviewEntryId | 統一EntryId | 現在のシンプル方式を維持 |
+| NBT対応 | ItemStackからURL抽出 | なし | 将来実装 (Item対応時) |
 
-## 2. HTTP通信層 (ContentDownloader.java)
+### 2. Content管理
 
-**現在の問題**: Content-Typeチェックは追加したが、MIMEタイプ保存なし
+| 項目 | レガシー | 現在 | 対応方針 |
+|------|---------|------|----------|
+| スロット | ContentSlot | なし | 現在のシンプル方式を維持 |
+| メタデータ | ContentMeta (JSON) | なし | 必要になったら追加 |
+| URL圧縮 | プロトコルプレフィックス ($=https) | フルURL保存 | 現在の方式を維持 |
+| 読込パイプライン | LoadQueue/DivisionQueue | 直接スケジューリング | 現在のシンプル方式を維持 |
+| リトライ | RetryCountOverException | なし | 検討 |
+| ブロック | ContentBlockedException | なし | 不要 |
 
-**レガシー方式**:
-```java
-// レガシー: ContentDownload.java
-cachemeta.setMime(ContentType.getOrDefault(entity).getMimeType());
-```
+### 3. 属性(Property)管理
 
-**修正内容**:
-1. MIMEタイプを`Content`またはキャッシュメタに保存
-2. 日本語コメントに統一
+| 項目 | レガシー | 現在 | 対応方針 |
+|------|---------|------|----------|
+| フレームワーク | Attrs/AttrReaders/AttrWriters | SignPicProperties | 現在のシンプル方式を維持 |
+| アニメーション補間 | PropReaderAnimation | なし | 将来検討 |
+| テクスチャパラメータ | TextureFloat/Boolean/Blend | なし | レンダラーで対応 |
+| キーフレーム | 時間ベース補間 | なし | 将来検討 |
 
-## 3. 専用例外クラス
+### 4. レンダリング
 
-**レガシーの例外クラス** (再現すべき):
-- `InvaildImageException` - 画像形式無効 (typoはレガシーのまま)
-- `LoadCanceledException` - 読込キャンセル
-- `ContentCapacityOverException` - サイズ超過 (現在: `ContentTooLargeException`)
+| 項目 | レガシー | 現在 | 対応方針 |
+|------|---------|------|----------|
+| レンダラー | TileEntity/Block/Item/Book/Chat | SignBlockEntityのみ | 段階的に追加 |
+| OpenGL | 直接操作 | RenderSystem/PoseStack | Minecraft標準API使用 |
+| ブレンド/ミップマップ | 詳細制御 | 基本設定のみ | 必要に応じて追加 |
+| 状態表示 | StateRender | render()内で直接 | 現在の方式を維持 |
 
-**修正内容**:
-```java
-// 追加: common/src/main/java/net/teamfruit/signpic/image/
-public class InvaildImageException extends IOException {
-    public InvaildImageException() {
-        super("Image not of any known type");
-    }
-}
+**将来対応予定:**
+- Item描画 (看板アイテム)
+- Book描画 (書物)
+- Chat描画 (チャット内画像)
 
-// 追加: common/src/main/java/net/teamfruit/signpic/
-public class LoadCanceledException extends IOException {
-    public LoadCanceledException() {
-        super("Load was cancelled");
-    }
-}
-```
+### 5. 設定(Config)
 
-## 4. State層のI18n対応
+| 項目 | レガシー | 現在 | 対応方針 |
+|------|---------|------|----------|
+| フレームワーク | Forge Configuration | シンプルJavaクラス | Cloth Config統合予定 |
+| リスナー | ConfigListener | なし | 不要 |
+| リロード | IReloadableConfig | なし | Cloth Configで対応 |
+| 設定項目 | 60以上 | 約30 | 必要なもののみ維持 |
 
-**レガシー方式**: `State.setErrorMessage(Throwable)`で例外種類に応じた翻訳
+**削除された設定:**
+- signpicDir, signTooltip (不要)
+- contentLoadTick, contentSyncTick (簡略化)
+- informationJoinBeta, informationTryNew (不要)
 
-**現在**: 例外をそのまま保持するのみ
+### 6. 画像処理
 
-**修正方針**: 現在のシンプルな実装を維持しつつ、UIレイヤーで翻訳対応
-(State内でI18nは過剰結合のため避ける)
+| 項目 | レガシー | 現在 | 対応方針 |
+|------|---------|------|----------|
+| Imageクラス | RemoteImage/ResourceImage/DynamicImageTexture | ContentTexture | 現在の方式を維持 |
+| リソース画像 | ResourceImageTexture | なし | 将来検討 (MODリソース画像) |
+| テクスチャパラメータ | OpenGL直接設定 | NativeImage/DynamicTexture | Minecraft標準API使用 |
 
-## 5. コメント日本語化
+### 7. ライフサイクルインターフェース
 
-全ファイルのJavadocおよびコメントを日本語に統一。
+**レガシーで削除されたインターフェース:**
+- `IInitable` - 初期化処理
+- `IAsyncProcessable` - 非同期処理
+- `IDivisionProcessable` - 分割処理
+- `ICollectable` - GC処理
+- `ILoadCancelable` - キャンセル処理
+- `ITickEntry` - ティック処理
 
-## 修正対象ファイル一覧
+**対応方針:** これらの複雑なインターフェースは不要。現在のシンプルな設計を維持。
 
-| ファイル | 修正内容 |
-|---------|---------|
-| `image/ImageLoader.java` | ImageReader方式、GIF対応、InvaildImageException |
-| `image/InvaildImageException.java` | 新規作成 |
-| `http/ContentDownloader.java` | 日本語コメント、ContentCapacityOverExceptionに改名 |
-| `LoadCanceledException.java` | 新規作成 |
-| `content/Content.java` | MIMEタイプフィールド追加 |
-| `state/State.java` | 日本語コメント |
+## 意図的な簡略化
 
-## 優先順位
+以下の項目はレガシーより意図的にシンプル化:
 
-1. **高**: ImageLoader.java - ImageReader方式 + InvaildImageException
-2. **高**: 例外クラス追加
-3. **中**: ContentDownloader.java - 日本語コメント
-4. **低**: MIMEタイプ保存 (後で必要になったら)
+1. **EntrySlot/ContentSlot削除** - 時間ベースGCで十分
+2. **LoadQueue/DivisionQueue削除** - 直接スケジューリングで十分
+3. **複雑な属性フレームワーク削除** - SignPicPropertiesで十分
+4. **マルチレンダラー統一** - 段階的に追加
+5. **複雑なライフサイクル削除** - シンプルなメソッドで十分
 
----
+## 今後の実装予定
 
-## GUI実装のレガシー整合
+### 高優先度
+- [ ] Cloth Config統合 (設定画面)
+- [ ] エラーメッセージI18n対応
 
-### レガシーGUI構成
+### 中優先度
+- [ ] タスク進捗表示 (GUI)
+- [ ] Item描画対応
+- [ ] リトライ機構
 
-```
-レガシー (bnnwidgetベース):
-GuiMain.java (592行) - メインエディタ
-├── SignEditor (WPanel)
-│   ├── GuiSize - サイズ編集 (W/H)
-│   ├── GuiOffset - オフセット編集 (X/Y/Z)
-│   ├── GuiRotation - 回転編集 (Quaternion)
-│   └── MainTextField - URL入力
-├── RightPanel - ボタン群 (SEE/PREVIEW/FILE/OPTION/PLACE)
-├── GuiSettings - 設定パネル
-└── OverlayFrame - オーバーレイ
+### 低優先度
+- [ ] Book描画対応
+- [ ] Chat描画対応
+- [ ] リソース画像対応
+- [ ] アニメーション補間
 
-GuiImage.java (362行) - 画像表示
-├── 3D変換 (OpenGL matrix操作)
-├── アニメーションフレーム管理
-└── ロード状態表示
+## 残りのコード整合タスク
 
-GuiTask.java (301行) - タスク表示
-├── バックグラウンドタスク一覧
-├── プログレスバー
-└── キャンセル機能
-```
+### 日本語コメント化
 
-### 現在のGUI構成
-
-```
-現在 (Minecraft Screen API):
-SignPicScreen.java (354行) - 単一画面
-├── EditBox urlField - URL入力
-├── Button群 - Load/Copy/Apply/Open/Clear/Reload/Close
-├── renderPreview() - 画像プレビュー (128x128)
-└── 状態テキスト表示
-```
-
-### 主要な違い
-
-| 機能 | レガシー | 現在 |
-|------|---------|------|
-| サイズ/オフセット/回転編集 | GuiSize/GuiOffset/GuiRotation | **未実装** |
-| プロパティ文字列生成 | AttrWriters | SignPicProperties.toSignText() |
-| タスク表示 | GuiTask | **未実装** |
-| 設定画面 | GuiSettings | **未実装** |
-| 画像3D変換プレビュー | GuiImage (OpenGL matrix) | 単純2D表示 |
-| アニメーション | VMotion/Easings | animationTime変数 |
-
-### レガシーに寄せる修正方針
-
-bnnwidgetを使わずに、レガシーの機能をMinecraft標準APIで再現:
-
-1. **プロパティ編集パネル追加**
-   - サイズ入力 (幅/高さ)
-   - オフセット入力 (X/Y/Z)
-   - 回転入力 (角度)
-   - 「生成」ボタンでURL+プロパティ文字列を結合
-
-2. **タスク表示追加**
-   - 画面下部にダウンロード進捗表示
-   - Communicatorのタスクキュー監視
-
-3. **コンパクトな単一画面維持**
-   - レガシーのマルチパネル構成は過剰
-   - 現在のシンプル設計を維持しつつ機能追加
-
-### 優先順位 (GUI)
-
-1. **高**: SignPicScreen.java 日本語コメント化
-2. **中**: プロパティ編集UI追加 (サイズ/オフセット/回転)
-3. **低**: タスク進捗表示 (後で実装可)
-4. **低**: 設定画面 (Cloth Config統合で別途対応)
+| ファイル | 状態 |
+|---------|------|
+| Entry.java | 未対応 |
+| EntryId.java | 未対応 |
+| EntryManager.java | 未対応 |
+| Content.java | 未対応 |
+| ContentManager.java | 未対応 |
+| ContentTexture.java | 未対応 |
+| Communicator.java | 未対応 |
+| SignPictureRenderer.java | 未対応 |
+| SignPicConfig.java | 未対応 |
+| SignRendererMixin.java | 未対応 |

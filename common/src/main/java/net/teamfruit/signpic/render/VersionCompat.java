@@ -21,7 +21,13 @@ public class VersionCompat {
         if (impl != null) {
             return impl.createResourceLocation(namespace, path);
         }
-        // Fallback - shouldn't happen if init is called
+        throw new IllegalStateException("VersionCompat not initialized");
+    }
+
+    public static ResourceLocation parseResourceLocation(String location) {
+        if (impl != null) {
+            return impl.parseResourceLocation(location);
+        }
         throw new IllegalStateException("VersionCompat not initialized");
     }
 
@@ -47,6 +53,7 @@ public class VersionCompat {
 
     public interface VersionCompatImpl {
         ResourceLocation createResourceLocation(String namespace, String path);
+        ResourceLocation parseResourceLocation(String location);
 
         void addVertex(
                 VertexConsumer consumer,

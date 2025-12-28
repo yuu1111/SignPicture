@@ -2,85 +2,174 @@ package net.teamfruit.signpic.content;
 
 import net.teamfruit.signpic.SignPicture;
 import net.teamfruit.signpic.config.SignPicConfig;
+import net.teamfruit.signpic.entry.EntrySlot;
+import net.teamfruit.signpic.entry.ICollectable;
 import net.teamfruit.signpic.http.Communicator;
 import net.teamfruit.signpic.http.ContentDownloader;
 import net.teamfruit.signpic.image.ImageLoader;
-import net.teamfruit.signpic.state.StateType;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Manages content loading, caching, and garbage collection.
+ * コンテンツの読み込み、キャッシュ、ガベージコレクションを管理するクラス。
  */
 public class ContentManager {
-    private static ContentManager instance;
+    /** シングルトンインスタンス */
+    public static @NotNull ContentManager instance = new ContentManager();
+
+    /** キャッシュディレクトリ */
     private static Path cacheDirectory;
 
+    /**
+     * シングルトンインスタンスを取得する。
+     *
+     * @return ContentManagerインスタンス
+     */
     public static ContentManager getInstance() {
-        if (instance == null) {
-            instance = new ContentManager();
-        }
         return instance;
     }
 
+    /**
+     * キャッシュディレクトリを設定する。
+     *
+     * @param directory キャッシュディレクトリ
+     */
     public static void setCacheDirectory(Path directory) {
         cacheDirectory = directory;
     }
 
+    /**
+     * キャッシュディレクトリを取得する。
+     *
+     * @return キャッシュディレクトリ
+     */
     public static Path getCacheDirectory() {
         return cacheDirectory;
     }
 
-    private final Map<String, Content> contentMap = new ConcurrentHashMap<>();
+    /** コンテンツレジストリ */
+    private final @NotNull Map<ContentId, ContentSlot> registry = new ConcurrentHashMap<>();
+
+    /** 初期化待ちキュー */
+    private final @NotNull Queue<ContentSlot> loadqueue = new ConcurrentLinkedQueue<>();
+
+    /** ロードティックカウンター */
+    private int loadtick = 0;
 
     private ContentManager() {}
 
     /**
-     * Gets existing content or creates a new one for the given URL.
+     * ContentIdに対応するContentを取得する。
+     * 存在しない場合は作成する。
+     *
+     * @param id ContentId
+     * @return Content
      */
-    public Content getOrCreate(String url) {
-        return contentMap.computeIfAbsent(url, this::createContent);
+    public @NotNull Content get(final @NotNull ContentId id) {
+        final ContentSlot entries = this.registry.get(id);
+        if (entries != null) {
+            return entries.get();
+        } else {
+            final Content entry = new Content(id);
+            final ContentSlot slot = new ContentSlot(entry);
+            this.registry.put(id, slot);
+            this.loadqueue.offer(slot);
+            return entry;
+        }
     }
 
+    /**
+     * URL文字列からContentを取得または作成する。
+     *
+     * @param url URL文字列
+     * @return Content
+     */
+    public @NotNull Content getOrCreate(String url) {
+        return get(ContentId.from(url));
+    }
+
+    /**
+     * URL文字列から既存のContentを取得する。
+     *
+     * @param url URL文字列
+     * @return Content、存在しない場合はnull
+     */
     @Nullable
-    public Content get(String url) {
-        return contentMap.get(url);
+    public Content getByUrl(String url) {
+        ContentId id = ContentId.from(url);
+        ContentSlot slot = registry.get(id);
+        return slot != null ? slot.get() : null;
     }
 
-    private Content createContent(String url) {
-        Content content = new Content(url);
-        scheduleLoad(content);
-        return content;
+    /**
+     * ティック処理。
+     * ロードキューの処理とGCを行う。
+     */
+    public void onTick() {
+        // ロードキュー処理
+        this.loadtick++;
+        if (this.loadtick > SignPicConfig.get().contentLoadTick) {
+            this.loadtick = 0;
+            final ContentSlot loadprogress = this.loadqueue.poll();
+            if (loadprogress != null) {
+                scheduleLoad(loadprogress.get());
+            }
+        }
+
+        // GC処理
+        for (final Iterator<Map.Entry<ContentId, ContentSlot>> itr = this.registry.entrySet().iterator(); itr.hasNext();) {
+            final Map.Entry<ContentId, ContentSlot> entry = itr.next();
+            final ContentSlot collectableSlot = entry.getValue();
+
+            if (collectableSlot.shouldCollect()) {
+                this.loadqueue.remove(collectableSlot);
+                collectableSlot.get().onCollect();
+                itr.remove();
+            }
+        }
     }
 
+    /**
+     * コンテンツのロードをスケジュールする。
+     *
+     * @param content コンテンツ
+     */
     private void scheduleLoad(Content content) {
-        content.getState().setType(StateType.WAITING);
+        content.onInit();
 
         Path cacheFile = getCacheFile(content.getUrl());
         content.setCachedFile(cacheFile);
 
-        // Check if already cached
+        // キャッシュ確認
         if (cacheFile != null && cacheFile.toFile().exists()) {
-            SignPicture.LOGGER.debug("Content found in cache: {}", cacheFile);
-            // Load from cache
+            SignPicture.LOGGER.debug("キャッシュから読み込み: {}", cacheFile);
             ImageLoader.scheduleLoad(content);
         } else if (cacheFile != null) {
-            // Download content, then load
+            // ダウンロード後にロード
             ContentDownloader downloader = new ContentDownloader(
                     content.getUrl(),
                     cacheFile,
                     content.getState(),
-                    () -> ImageLoader.scheduleLoad(content) // Callback after download
+                    () -> ImageLoader.scheduleLoad(content)
             );
             Communicator.getInstance().submit(downloader);
         }
     }
 
+    /**
+     * URLからキャッシュファイルパスを生成する。
+     *
+     * @param url URL文字列
+     * @return キャッシュファイルパス
+     */
     @Nullable
     private Path getCacheFile(String url) {
         if (cacheDirectory == null) {
@@ -97,7 +186,7 @@ public class ContentManager {
                 hexString.append(hex);
             }
 
-            // Get file extension from URL
+            // URLから拡張子を取得
             String extension = ".cache";
             int lastDot = url.lastIndexOf('.');
             int lastSlash = url.lastIndexOf('/');
@@ -110,50 +199,48 @@ public class ContentManager {
 
             return cacheDirectory.resolve(hexString + extension);
         } catch (Exception e) {
-            SignPicture.LOGGER.error("Failed to generate cache path", e);
+            SignPicture.LOGGER.error("キャッシュパス生成に失敗", e);
             return null;
         }
     }
 
     /**
-     * Runs garbage collection on unused content.
+     * 全コンテンツを再読み込みする。
      */
-    public void gc() {
-        long gcDelayMs = SignPicConfig.get().contentGcDelayTicks * 50L;
-        Iterator<Map.Entry<String, Content>> it = contentMap.entrySet().iterator();
-
-        while (it.hasNext()) {
-            Map.Entry<String, Content> entry = it.next();
-            Content content = entry.getValue();
-
-            if (content.shouldCollect(gcDelayMs)) {
-                SignPicture.LOGGER.debug("GC: Removing content {}", entry.getKey());
-                content.dispose();
-                it.remove();
-            }
+    public void reloadAll() {
+        for (Map.Entry<ContentId, ContentSlot> entry : registry.entrySet()) {
+            entry.getValue().get().markDirty();
         }
     }
 
     /**
-     * Clears all content and disposes resources.
+     * 全コンテンツを再ダウンロードする。
+     */
+    public void redownloadAll() {
+        for (Map.Entry<ContentId, ContentSlot> entry : registry.entrySet()) {
+            entry.getValue().get().markDirtyWithCache();
+        }
+    }
+
+    /**
+     * すべてのコンテンツを削除し、リソースを解放する。
      */
     public void clear() {
-        for (Content content : contentMap.values()) {
-            content.dispose();
+        for (ContentSlot slot : registry.values()) {
+            slot.get().dispose();
         }
-        contentMap.clear();
+        registry.clear();
     }
 
     /**
-     * Clears all textures and schedules reload from cache.
-     * Called when resources are reloaded (e.g., resource pack change).
+     * テクスチャをクリアし、キャッシュから再読み込みをスケジュールする。
      */
     public void clearTextures() {
-        for (Content content : contentMap.values()) {
+        for (ContentSlot slot : registry.values()) {
+            Content content = slot.get();
             ContentTexture texture = content.getTexture();
             if (texture != null) {
                 content.setTexture(null);
-                // Schedule reload from cache
                 if (content.getCachedFile() != null && content.getCachedFile().toFile().exists()) {
                     ImageLoader.scheduleLoad(content);
                 }
@@ -161,7 +248,43 @@ public class ContentManager {
         }
     }
 
+    /**
+     * ガベージコレクションを実行する (onTick()へのエイリアス)。
+     */
+    public void gc() {
+        onTick();
+    }
+
+    /**
+     * コンテンツ数を取得する。
+     *
+     * @return コンテンツ数
+     */
     public int getContentCount() {
-        return contentMap.size();
+        return registry.size();
+    }
+
+    /**
+     * コンテンツ用のスロット。
+     */
+    public static class ContentSlot extends EntrySlot<Content> implements ICollectable {
+        public ContentSlot(final @NotNull Content entry) {
+            super(entry);
+        }
+
+        @Override
+        public void onCollect() {
+            this.entry.onCollect();
+        }
+
+        @Override
+        public boolean shouldCollect() {
+            return this.entry.shouldCollect() || super.shouldCollect();
+        }
+
+        @Override
+        protected int getCollectTimes() {
+            return SignPicConfig.get().contentGcDelayTicks;
+        }
     }
 }
