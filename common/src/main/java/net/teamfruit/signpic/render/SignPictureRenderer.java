@@ -72,7 +72,7 @@ public class SignPictureRenderer {
         content.touch();
 
         // Render the image
-        renderImage(sign, poseStack, texture, partialTick, packedLight);
+        renderImage(sign, poseStack, bufferSource, texture, partialTick, packedLight);
     }
 
     private static String getSignText(SignBlockEntity sign) {
@@ -98,6 +98,7 @@ public class SignPictureRenderer {
     private static void renderImage(
             SignBlockEntity sign,
             PoseStack poseStack,
+            MultiBufferSource bufferSource,
             ContentTexture texture,
             float partialTick,
             int packedLight
@@ -161,9 +162,15 @@ public class SignPictureRenderer {
         float offsetX = -renderWidth / 2;
         float offsetY = -renderHeight / 2;
 
-        // TODO: Actual rendering implementation
-        // Use RenderHelper for version-specific rendering
-        RenderHelper.drawTexturedQuad(poseStack, frame.getTextureId(), offsetX, offsetY, renderWidth, renderHeight, packedLight);
+        // Render the textured quad
+        RenderHelper.drawTexturedQuad(
+                poseStack,
+                bufferSource,
+                frame.getTextureLocation(),
+                offsetX, offsetY,
+                renderWidth, renderHeight,
+                packedLight
+        );
 
         poseStack.popPose();
     }

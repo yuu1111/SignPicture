@@ -1,10 +1,13 @@
 package net.teamfruit.signpic.content;
 
+import net.minecraft.resources.ResourceLocation;
+import net.teamfruit.signpic.image.ImageLoader;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.List;
 
 /**
  * Represents a loaded texture that can be rendered.
- * This is platform-agnostic; actual OpenGL texture management is done by platform implementations.
  */
 public class ContentTexture {
     private final List<Frame> frames;
@@ -35,16 +38,23 @@ public class ContentTexture {
         return frames.size();
     }
 
+    @Nullable
     public Frame getFrame(int index) {
+        if (frames.isEmpty()) return null;
         return frames.get(index % frames.size());
     }
 
     /**
      * Gets the appropriate frame for the given time in seconds.
      */
+    @Nullable
     public Frame getFrameForTime(float timeSeconds) {
-        if (!animated || frames.isEmpty()) {
-            return frames.isEmpty() ? null : frames.get(0);
+        if (frames.isEmpty()) {
+            return null;
+        }
+
+        if (!animated) {
+            return frames.get(0);
         }
 
         float totalDuration = 0;
@@ -79,16 +89,16 @@ public class ContentTexture {
      * Represents a single frame of the texture (for animated images).
      */
     public static class Frame {
-        private final int textureId;
-        private final float duration; // Duration in seconds
+        private final ResourceLocation textureLocation;
+        private final float duration; // Duration in seconds (0 for static images)
 
-        public Frame(int textureId, float duration) {
-            this.textureId = textureId;
+        public Frame(ResourceLocation textureLocation, float duration) {
+            this.textureLocation = textureLocation;
             this.duration = duration;
         }
 
-        public int getTextureId() {
-            return textureId;
+        public ResourceLocation getTextureLocation() {
+            return textureLocation;
         }
 
         public float getDuration() {
@@ -96,7 +106,9 @@ public class ContentTexture {
         }
 
         public void dispose() {
-            // Platform-specific texture disposal will be handled by the renderer
+            if (textureLocation != null) {
+                ImageLoader.unregisterTexture(textureLocation);
+            }
         }
     }
 }

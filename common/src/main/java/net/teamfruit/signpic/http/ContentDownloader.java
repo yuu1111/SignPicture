@@ -22,12 +22,18 @@ public class ContentDownloader implements Communicator.CommunicateTask {
     private final String url;
     private final Path destination;
     private final State state;
+    private final Runnable onComplete;
     private volatile boolean cancelled = false;
 
     public ContentDownloader(String url, Path destination, State state) {
+        this(url, destination, state, null);
+    }
+
+    public ContentDownloader(String url, Path destination, State state, Runnable onComplete) {
         this.url = url;
         this.destination = destination;
         this.state = state;
+        this.onComplete = onComplete;
     }
 
     @Override
@@ -90,6 +96,11 @@ public class ContentDownloader implements Communicator.CommunicateTask {
             // Move temp file to final destination
             Files.move(tempFile, destination, StandardCopyOption.REPLACE_EXISTING);
             SignPicture.LOGGER.debug("Download complete: {}", destination);
+
+            // Call completion callback
+            if (onComplete != null) {
+                onComplete.run();
+            }
 
         } finally {
             if (connection != null) {

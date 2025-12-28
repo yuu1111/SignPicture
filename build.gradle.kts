@@ -119,17 +119,29 @@ if (loader == "neoforge") {
 
 // Configure source sets - use root project paths for Stonecutter
 val rootDir = rootProject.projectDir
+val versionProject = stonecutter.current.project
 sourceSets {
     main {
         java {
             srcDir(rootDir.resolve("common/src/main/java"))
             srcDir(rootDir.resolve("$loader/src/main/java"))
+            // Add version-specific sources (overrides platform sources)
+            srcDir(rootDir.resolve("versions/$versionProject/src/main/java"))
         }
         resources {
             srcDir(rootDir.resolve("common/src/main/resources"))
             srcDir(rootDir.resolve("$loader/src/main/resources"))
+            srcDir(rootDir.resolve("versions/$versionProject/src/main/resources"))
         }
     }
+}
+
+// Configure Stonecutter to process common sources
+stonecutter {
+    swap("mcVersion", mcVersion)
+    const("fabric", loader == "fabric")
+    const("forge", loader == "forge")
+    const("neoforge", loader == "neoforge")
 }
 
 // Java configuration - MC 1.21+ requires Java 21
@@ -164,4 +176,9 @@ tasks.processResources {
     filesMatching(listOf("fabric.mod.json", "META-INF/mods.toml", "META-INF/neoforge.mods.toml")) {
         expand(props)
     }
+}
+
+// Handle duplicate sources in sourcesJar (version-specific overrides)
+tasks.named<Jar>("sourcesJar") {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

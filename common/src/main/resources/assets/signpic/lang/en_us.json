@@ -1,0 +1,12 @@
+{
+  "category.signpic": "SignPicture",
+  "key.signpic.gui": "Open SignPicture GUI",
+  "gui.signpic.title": "SignPicture",
+  "gui.signpic.load": "Load Image",
+  "gui.signpic.clear": "Clear Cache",
+  "gui.signpic.reload": "Reload",
+  "gui.signpic.close": "Close",
+  "gui.signpic.url_hint": "Enter image URL...",
+  "gui.signpic.cached_images": "Cached Images: %d",
+  "gui.signpic.active_entries": "Active Entries: %d"
+}

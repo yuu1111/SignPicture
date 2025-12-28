@@ -1,0 +1,12 @@
+{
+  "category.signpic": "SignPicture",
+  "key.signpic.gui": "SignPicture GUIを開く",
+  "gui.signpic.title": "SignPicture",
+  "gui.signpic.load": "画像を読み込む",
+  "gui.signpic.clear": "キャッシュをクリア",
+  "gui.signpic.reload": "再読み込み",
+  "gui.signpic.close": "閉じる",
+  "gui.signpic.url_hint": "画像URLを入力...",
+  "gui.signpic.cached_images": "キャッシュ済み画像: %d",
+  "gui.signpic.active_entries": "アクティブエントリ: %d"
+}

@@ -4,6 +4,7 @@ import net.teamfruit.signpic.SignPicture;
 import net.teamfruit.signpic.config.SignPicConfig;
 import net.teamfruit.signpic.http.Communicator;
 import net.teamfruit.signpic.http.ContentDownloader;
+import net.teamfruit.signpic.image.ImageLoader;
 import net.teamfruit.signpic.state.StateType;
 import org.jetbrains.annotations.Nullable;
 
@@ -65,15 +66,16 @@ public class ContentManager {
 
         // Check if already cached
         if (cacheFile != null && cacheFile.toFile().exists()) {
-            content.getState().setType(StateType.LOADING);
-            // TODO: Load from cache
             SignPicture.LOGGER.debug("Content found in cache: {}", cacheFile);
+            // Load from cache
+            ImageLoader.scheduleLoad(content);
         } else if (cacheFile != null) {
-            // Download content
+            // Download content, then load
             ContentDownloader downloader = new ContentDownloader(
                     content.getUrl(),
                     cacheFile,
-                    content.getState()
+                    content.getState(),
+                    () -> ImageLoader.scheduleLoad(content) // Callback after download
             );
             Communicator.getInstance().submit(downloader);
         }
@@ -140,6 +142,23 @@ public class ContentManager {
             content.dispose();
         }
         contentMap.clear();
+    }
+
+    /**
+     * Clears all textures and schedules reload from cache.
+     * Called when resources are reloaded (e.g., resource pack change).
+     */
+    public void clearTextures() {
+        for (Content content : contentMap.values()) {
+            ContentTexture texture = content.getTexture();
+            if (texture != null) {
+                content.setTexture(null);
+                // Schedule reload from cache
+                if (content.getCachedFile() != null && content.getCachedFile().toFile().exists()) {
+                    ImageLoader.scheduleLoad(content);
+                }
+            }
+        }
     }
 
     public int getContentCount() {
